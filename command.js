@@ -1,14 +1,17 @@
-const findUp = require('find-up')
-const defaults = require('./defaults')
-const { readFileSync } = require('fs')
-
-const configPath = findUp.sync(['.versionrc', '.versionrc.json'])
-const config = configPath ? JSON.parse(readFileSync(configPath)) : {}
 const spec = require('conventional-changelog-config-spec')
-const { START_OF_LAST_RELEASE_PATTERN } = require('./lib/lifecycles/changelog')
+const { getConfiguration } = require('./lib/configuration')
+const defaults = require('./defaults')
 
 const yargs = require('yargs')
   .usage('Usage: $0 [options]')
+  .option('packageFiles', {
+    default: defaults.packageFiles,
+    array: true
+  })
+  .option('bumpFiles', {
+    default: defaults.bumpFiles,
+    array: true
+  })
   .option('release-as', {
     alias: 'r',
     describe: 'Specify the release type manually (like npm version <major|minor|patch>)',
@@ -81,7 +84,7 @@ const yargs = require('yargs')
   .option('git-tag-fallback', {
     type: 'boolean',
     default: defaults.gitTagFallback,
-    describe: `fallback to git tags for version, if no meta-information file is found (e.g., package.json)`
+    describe: 'fallback to git tags for version, if no meta-information file is found (e.g., package.json)'
   })
   .option('path', {
     type: 'string',
@@ -89,12 +92,16 @@ const yargs = require('yargs')
   })
   .option('changelogHeader', {
     type: 'string',
-    describe: 'Use a custom header when generating and updating changelog.'
+    describe: '[DEPRECATED] Use a custom header when generating and updating changelog.\nThis option will be removed in the next major version, please use --header.'
   })
   .option('preset', {
     type: 'string',
     default: defaults.preset,
     describe: 'Commit message guideline preset'
+  })
+  .option('lerna-package', {
+    type: 'string',
+    describe: 'Name of the package from which the tags will be extracted'
   })
   .check((argv) => {
     if (typeof argv.scripts !== 'object' || Array.isArray(argv.scripts)) {
@@ -110,22 +117,15 @@ const yargs = require('yargs')
   .example('$0', 'Update changelog and tag release')
   .example('$0 -m "%s: see changelog for details"', 'Update changelog and tag release with custom commit message')
   .pkgConf('standard-version')
-  .config(config)
+  .config(getConfiguration())
   .wrap(97)
-  .check((args) => {
-    if (args.changelogHeader && args.changelogHeader.search(START_OF_LAST_RELEASE_PATTERN) !== -1) {
-      throw Error(`custom changelog header must not match ${START_OF_LAST_RELEASE_PATTERN}`)
-    } else {
-      return true
-    }
-  })
 
 Object.keys(spec.properties).forEach(propertyKey => {
   const property = spec.properties[propertyKey]
   yargs.option(propertyKey, {
     type: property.type,
     describe: property.description,
-    default: property.default,
+    default: defaults[propertyKey] ? defaults[propertyKey] : property.default,
     group: 'Preset Configuration:'
   })
 })
